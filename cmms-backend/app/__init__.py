@@ -43,9 +43,14 @@ def create_app():
     db_host = os.environ.get('MONGO_HOST', 'localhost')
     auth_db = os.environ.get('MONGO_AUTH_DB', 'admin')
 
+    # Gunakan MONGO_URI langsung jika tersedia (untuk Atlas / mongodb+srv://).
+    # Fallback ke format URI lokal untuk dev environment.
+    mongo_uri = os.environ.get('MONGO_URI') or \
+        f'mongodb://{db_username}:{db_password}@{db_host}:27017/{db_name}?authSource={auth_db}'
+
     app.config['MONGODB_SETTINGS'] = {
         'db': db_name,
-        'host': f'mongodb://{db_username}:{db_password}@{db_host}:27017/{db_name}?authSource={auth_db}'
+        'host': mongo_uri
     }
 
     # Inisialisasi DB dan Bcrypt dengan aplikasi Flask
