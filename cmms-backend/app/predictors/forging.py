@@ -29,7 +29,7 @@ class ForgingPredictor(BasePredictor):
 
     def __init__(self):
         # model ada di: machine-learning filtered data/forging/models/
-        self.models_dir = self._ML_ROOT / "forging" / "models"
+        self.models_dir = self._ML_ROOT / "forging"
 
     @property
     def feature_columns(self):

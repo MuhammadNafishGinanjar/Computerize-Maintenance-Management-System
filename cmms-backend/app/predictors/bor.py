@@ -36,7 +36,7 @@ class BorPredictor(BasePredictor):
 
     def __init__(self):
         # model ada di: machine-learning filtered data/bor/models/
-        self.models_dir = self._ML_ROOT / "bor" / "models"
+        self.models_dir = self._ML_ROOT / "bor"
 
     @property
     def feature_columns(self):

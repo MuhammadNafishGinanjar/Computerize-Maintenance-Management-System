@@ -29,7 +29,7 @@ class CompressorPredictor(BasePredictor):
 
     def __init__(self):
         # model ada di: machine-learning filtered data/compressor/models/
-        self.models_dir = self._ML_ROOT / "compressor" / "models"
+        self.models_dir = self._ML_ROOT / "compressor"
 
     @property
     def feature_columns(self):

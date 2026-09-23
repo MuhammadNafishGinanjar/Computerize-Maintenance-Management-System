@@ -57,7 +57,7 @@ class GenericHybridPredictor(BasePredictor):
         """
         self.folder = folder
         self.machine_label = machine_label
-        self.models_dir = self._ML_ROOT / folder / "models"
+        self.models_dir = self._ML_ROOT / folder
         self._components = list(components) if components else None
         self.component_names = component_names or {}
         self.ok_message = ok_message

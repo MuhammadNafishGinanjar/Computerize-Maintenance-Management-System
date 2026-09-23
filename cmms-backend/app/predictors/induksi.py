@@ -29,7 +29,7 @@ class InduksiPredictor(BasePredictor):
 
     def __init__(self):
         # model ada di: machine-learning filtered data/Induksi/models/
-        self.models_dir = self._ML_ROOT / "Induksi" / "models"
+        self.models_dir = self._ML_ROOT / "induksi"
 
     @property
     def feature_columns(self):
