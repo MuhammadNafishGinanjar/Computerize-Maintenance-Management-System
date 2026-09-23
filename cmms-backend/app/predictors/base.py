@@ -14,8 +14,9 @@ RISK_ORDER = ["very_low", "low", "medium", "high", "critical"]
 class BasePredictor(ABC):
     """Interface wajib yang harus diimplementasikan setiap predictor."""
 
-    # Root folder machine-learning (2 level di atas cmms-backend/app/)
-    _ML_ROOT: Path = Path(__file__).resolve().parents[3] / "machine-learning filtered data"
+    # Root folder machine-learning — di dalam cmms-backend/ml_models/
+    # (ikut di-deploy ke Railway bersama backend)
+    _ML_ROOT: Path = Path(__file__).resolve().parents[2] / "ml_models"
 
     @property
     @abstractmethod

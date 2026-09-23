@@ -9,7 +9,7 @@ sehingga tidak perlu lagi menulis file predictor baru untuk tiap mesin.
 
 Cara pakai (mesin baru):
     1. Simpan hasil training ke:
-         machine-learning filtered data/<folder>/models/
+         cmms-backend/ml_models/<folder>/
            - hybrid_model_<komponen>.pkl   (berisi scaler, svm, feature_columns,
                                             class_names)
            - dnn_extractor_<komponen>.keras
@@ -47,7 +47,7 @@ class GenericHybridPredictor(BasePredictor):
         fault_message=None,
     ):
         """
-        folder          : nama subfolder di "machine-learning filtered data/"
+        folder          : nama subfolder di "cmms-backend/ml_models/"
         machine_label   : nama mesin untuk teks rekomendasi (mis. "Mesin CNC")
         components      : daftar komponen; None = deteksi otomatis dari nama file
         component_names : {komponen: "Nama tampilan"} untuk teks rekomendasi
