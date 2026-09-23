@@ -3,7 +3,7 @@ Konfigurasi simulasi Version 2 — 5 sensor untuk komponen Bearing.
 """
 
 # URL backend yang di-hosting
-BASE_URL = "https://cmms-test-domain.duckdns.org/api/ml"
+BASE_URL = "https://computerize-maintenance-management-system-production.up.railway.app/api/ml"
 
 # Machine ID target (sesuai field machine_id di database aset)
 MACHINE_ID = "CMP-DUMMY-001"

@@ -28,7 +28,7 @@ import os
 
 # URL backend CMMS (Flask) yang sudah di-hosting. Override lewat env var
 # CMMS_API_BASE bila perlu (misal untuk tes ke localhost:5000/api).
-CMMS_API_BASE = os.environ.get("CMMS_API_BASE", "https://cmms-polmanbandung.site/api").strip()
+CMMS_API_BASE = os.environ.get("CMMS_API_BASE", "https://computerize-maintenance-management-system-production.up.railway.app/api").strip()
 
 
 PROFILES = {
