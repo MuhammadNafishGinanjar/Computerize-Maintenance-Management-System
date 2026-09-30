@@ -43,6 +43,7 @@
     border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
   }
   button.submit:hover { background: var(--blue-dark); }
+  button.submit:disabled { background: var(--slate-400); cursor: not-allowed; }
   .error {
     border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c;
     padding: 12px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 20px;
@@ -55,6 +56,56 @@
   .success svg { flex-shrink: 0; }
   .footnote { font-size: 12px; color: var(--slate-400); margin-top: 6px; }
   code { background: var(--slate-100); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  /* ── Mode toggle (Single / Continuous) ── */
+  .mode-toggle {
+    display: flex; gap: 0; border: 1px solid var(--slate-200); border-radius: 8px;
+    overflow: hidden; margin-bottom: 18px; width: fit-content;
+  }
+  .mode-toggle button {
+    padding: 8px 20px; border: none; background: #fff; font-size: 13px; font-weight: 600;
+    color: var(--slate-500); cursor: pointer; transition: background .15s, color .15s;
+  }
+  .mode-toggle button.active { background: var(--blue); color: #fff; }
+  .mode-toggle button:first-child { border-right: 1px solid var(--slate-200); }
+
+  /* ── Continuous controls ── */
+  #continuous-controls { margin-top: 0; }
+  .ctrl-row {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .ctrl-row label { margin: 0; font-size: 13px; font-weight: 600; color: var(--slate-700); }
+  .ctrl-row select { width: auto; padding: 8px 11px; font-size: 13px; }
+  button.btn-start {
+    background: var(--green); color: #fff; border: none; padding: 10px 22px;
+    border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  button.btn-start:hover { background: #15803d; }
+  button.btn-stop {
+    background: var(--red); color: #fff; border: none; padding: 10px 22px;
+    border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  button.btn-stop:hover { background: #b91c1c; }
+  .hidden { display: none !important; }
+
+  /* ── Status panel (Continuous) ── */
+  #cont-status {
+    display: none; border: 1px solid var(--slate-200); border-radius: 10px;
+    padding: 12px 16px; background: var(--slate-50); font-size: 13px;
+    line-height: 1.8; margin-top: 4px;
+  }
+  #cont-status.running { border-color: #bbf7d0; background: #f0fdf4; }
+  #cont-status.error   { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
+  .status-row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .status-label { font-weight: 600; color: var(--slate-500); }
+  .status-value { font-weight: 700; color: var(--slate-800); font-variant-numeric: tabular-nums; }
+  .dot-pulse {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); margin-right: 6px; animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .3; }
+  }
 </style>
 </head>
 <body>
@@ -88,6 +139,15 @@
     <form method="post" class="card" id="sensor-form">
       <h2>Data Sensor</h2>
 
+      <!-- Mode toggle -->
+      <div style="margin-bottom:18px">
+        <div style="font-size:12px;font-weight:600;color:var(--slate-500);margin-bottom:8px">Mode Pengiriman</div>
+        <div class="mode-toggle">
+          <button type="button" id="btn-mode-single" class="active" onclick="setMode('single')">Kirim Sekali</button>
+          <button type="button" id="btn-mode-cont"              onclick="setMode('continuous')">Continuous</button>
+        </div>
+      </div>
+
       <div class="field">
         <label for="preset">Preset Nilai (opsional)</label>
         <select id="preset">
@@ -111,13 +171,54 @@
         {% endfor %}
       </div>
 
-      <button type="submit" class="submit">Kirim Data Sensor</button>
-      <p class="footnote">Data akan disimpan sebagai riwayat sensor lalu diproses model ML — hasilnya langsung terlihat pada widget health &amp; risk di aplikasi CMMS.</p>
+      <!-- Single mode: tombol submit biasa -->
+      <div id="single-controls">
+        <button type="submit" class="submit" id="btn-submit">Kirim Data Sensor</button>
+        <p class="footnote">Data akan disimpan sebagai riwayat sensor lalu diproses model ML — hasilnya langsung terlihat pada widget health &amp; risk di aplikasi CMMS.</p>
+      </div>
+
+      <!-- Continuous mode: interval + start/stop + status -->
+      <div id="continuous-controls" style="display:none">
+        <div class="ctrl-row">
+          <label for="interval-select">Interval:</label>
+          <select id="interval-select" style="width:auto">
+            <option value="5000">5 detik</option>
+            <option value="10000" selected>10 detik</option>
+            <option value="30000">30 detik</option>
+            <option value="60000">60 detik</option>
+          </select>
+          <button type="button" class="btn-start" id="btn-start" onclick="startContinuous()">▶ Start</button>
+          <button type="button" class="btn-stop hidden" id="btn-stop" onclick="stopContinuous()">⏹ Stop</button>
+        </div>
+
+        <div id="cont-status">
+          <div class="status-row">
+            <span class="status-label">Status</span>
+            <span class="status-value" id="cs-state">—</span>
+          </div>
+          <div class="status-row">
+            <span class="status-label">Terkirim</span>
+            <span class="status-value" id="cs-count">0 kali</span>
+          </div>
+          <div class="status-row">
+            <span class="status-label">Terakhir</span>
+            <span class="status-value" id="cs-last">—</span>
+          </div>
+          <div class="status-row" id="cs-error-row" style="display:none">
+            <span class="status-label">Error terakhir</span>
+            <span class="status-value" id="cs-error" style="color:#b91c1c"></span>
+          </div>
+        </div>
+        <p class="footnote">Nilai sensor yang diambil adalah nilai saat "Start" ditekan. Untuk ubah nilai, Stop dulu lalu ubah, baru Start lagi.</p>
+      </div>
     </form>
   </div>
 
   <script>
     const PRESETS = {{ presets | tojson }};
+    const FIELDS  = {{ fields | tojson }};   // [[key, label, unit, default], ...]
+
+    // ── Preset handler (tidak berubah) ─────────────────────────────────────
     document.getElementById('preset').addEventListener('change', (e) => {
       const preset = PRESETS.find(p => p.id === e.target.value);
       if (!preset || !preset.data) return;
@@ -125,6 +226,135 @@
         const input = document.getElementById(key);
         if (input) input.value = value;
       });
+    });
+
+    // ── Mode toggle ─────────────────────────────────────────────────────────
+    function setMode(mode) {
+      const isCont = mode === 'continuous';
+      document.getElementById('btn-mode-single').classList.toggle('active', !isCont);
+      document.getElementById('btn-mode-cont').classList.toggle('active', isCont);
+      document.getElementById('single-controls').style.display    = isCont ? 'none'  : '';
+      document.getElementById('continuous-controls').style.display = isCont ? ''     : 'none';
+
+      // Kalau balik ke Single saat Continuous masih jalan, stop dulu
+      if (!isCont && contTimer !== null) stopContinuous();
+    }
+
+    // ── Continuous logic ────────────────────────────────────────────────────
+    let contTimer     = null;   // setInterval handle (kirim data)
+    let contCount     = 0;
+    let contPayload   = null;   // snapshot nilai saat Start
+    let contRunning   = false;
+    let contIntervalMs = 10000;
+
+    function snapshotPayload() {
+      const machineId = document.getElementById('machine_id').value.trim()
+        || {{ machine_id | tojson }};
+      const payload = { machine_id: machineId };
+      for (const [key] of FIELDS) {
+        const val = parseFloat(document.getElementById(key)?.value);
+        if (isNaN(val)) return null; // validasi gagal
+        payload[key] = val;
+      }
+      return payload;
+    }
+
+    function setContStatus(state, extraClass) {
+      const el = document.getElementById('cont-status');
+      el.style.display = '';
+      el.className = extraClass || '';
+      document.getElementById('cs-state').innerHTML =
+        state === 'running'
+          ? '<span class="dot-pulse"></span>Berjalan'
+          : state === 'stopped' ? 'Berhenti'
+          : state === 'error'   ? 'Error'
+          : state;
+    }
+
+    function updateCounter(lastTs, errMsg) {
+      document.getElementById('cs-count').textContent = contCount + ' kali';
+      document.getElementById('cs-last').textContent  = lastTs
+        ? new Date(lastTs).toLocaleTimeString('id-ID')
+        : '—';
+      const errRow = document.getElementById('cs-error-row');
+      if (errMsg) {
+        document.getElementById('cs-error').textContent = errMsg;
+        errRow.style.display = '';
+      } else {
+        errRow.style.display = 'none';
+      }
+    }
+
+    async function sendOnce() {
+      if (!contPayload) return;
+      try {
+        const res  = await fetch('/send-sensor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contPayload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          updateCounter(null, data.error || ('HTTP ' + res.status));
+          return;
+        }
+        contCount++;
+        updateCounter(new Date().toISOString(), null);
+        setContStatus('running', 'running');
+      } catch (err) {
+        updateCounter(null, err.message);
+      }
+    }
+
+    function startContinuous() {
+      const payload = snapshotPayload();
+      if (!payload) {
+        alert('Semua field sensor harus diisi dengan angka sebelum memulai.');
+        return;
+      }
+      contPayload    = payload;
+      contCount      = 0;
+      contRunning    = true;
+      contIntervalMs = parseInt(document.getElementById('interval-select').value, 10);
+
+      document.getElementById('btn-start').classList.add('hidden');
+      document.getElementById('btn-stop').classList.remove('hidden');
+      document.getElementById('interval-select').disabled = true;
+      // Kunci field sensor + machine_id selama running
+      document.getElementById('machine_id').disabled = true;
+      FIELDS.forEach(([key]) => {
+        const el = document.getElementById(key);
+        if (el) el.disabled = true;
+      });
+      document.getElementById('preset').disabled = true;
+
+      setContStatus('running', 'running');
+      updateCounter(null, null);
+
+      sendOnce(); // kirim langsung, tidak tunggu interval pertama
+      contTimer = setInterval(sendOnce, contIntervalMs);
+    }
+
+    function stopContinuous() {
+      if (contTimer !== null) { clearInterval(contTimer); contTimer = null; }
+      contRunning = false;
+
+      document.getElementById('btn-start').classList.remove('hidden');
+      document.getElementById('btn-stop').classList.add('hidden');
+      document.getElementById('interval-select').disabled = false;
+      document.getElementById('machine_id').disabled = false;
+      FIELDS.forEach(([key]) => {
+        const el = document.getElementById(key);
+        if (el) el.disabled = false;
+      });
+      document.getElementById('preset').disabled = false;
+
+      setContStatus('stopped', '');
+    }
+
+    // Pastikan interval berhenti kalau tab/window ditutup
+    window.addEventListener('beforeunload', () => {
+      if (contTimer !== null) clearInterval(contTimer);
     });
   </script>
 </body>
