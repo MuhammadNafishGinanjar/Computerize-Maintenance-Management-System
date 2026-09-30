@@ -322,7 +322,7 @@ def create_dummy_data():
             {
                 'asset': forging_asset,
                 'regulation_name': 'Inspection K3',
-                'status': 'completed',
+                'status': 'compliant',
                 'next_check_due': now + datetime.timedelta(days=12),
                 'evidence_document_url': 'https://example.com/evidence/k3-forging'
             },
@@ -343,7 +343,7 @@ def create_dummy_data():
             {
                 'asset': compressor_asset,
                 'regulation_name': 'Pemeriksaan Lingkungan',
-                'status': 'completed',
+                'status': 'compliant',
                 'next_check_due': now + datetime.timedelta(days=14),
                 'evidence_document_url': 'https://example.com/evidence/env-compressor'
             },

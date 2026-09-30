@@ -6,8 +6,10 @@ import AssetForm from './AssetForm.jsx';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import Modal from '../components/Modal.jsx';
+import { useSocket } from '../context/useSocket.js';
 
 export default function AssetListPage() {
+  const { socket } = useSocket();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,7 +48,17 @@ export default function AssetListPage() {
   useEffect(() => {
     fetchAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
+
+  // Auto-refresh saat ada aset dibuat/diubah/dihapus dari sesi lain
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchAssets();
+    socket.on('asset_updated', handleUpdate);
+    return () => {
+      socket.off('asset_updated', handleUpdate);
+    };
+  }, [socket]);
 
   const handleAssetCreated = () => {
     fetchAssets(); 
@@ -82,13 +94,13 @@ export default function AssetListPage() {
   };
 
   const STATUS_CONFIG = {
-    running:     { label: 'Berjalan',    cls: 'bg-green-100 text-green-700 border-green-200' },
-    idle:        { label: 'Menganggur',  cls: 'bg-blue-100 text-blue-700 border-blue-200' },
-    breakdown:   { label: 'Rusak',       cls: 'bg-red-100 text-red-700 border-red-200' },
+    running:     { label: 'Beroperasi',  cls: 'bg-green-100 text-green-700 border-green-200' },
+    idle:        { label: 'Standby',     cls: 'bg-blue-100 text-blue-700 border-blue-200' },
+    breakdown:   { label: 'Gangguan',    cls: 'bg-red-100 text-red-700 border-red-200' },
     maintenance: { label: 'Perawatan',   cls: 'bg-amber-100 text-amber-700 border-amber-200' },
     warning:     { label: 'Peringatan',  cls: 'bg-orange-100 text-orange-700 border-orange-200' },
-    off:         { label: 'Mati',        cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-    down:        { label: 'Rusak',       cls: 'bg-red-100 text-red-700 border-red-200' },
+    off:         { label: 'Tidak Aktif', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+    down:        { label: 'Gangguan',    cls: 'bg-red-100 text-red-700 border-red-200' },
   };
 
   if (error) {
@@ -155,12 +167,12 @@ export default function AssetListPage() {
             className="text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white shrink-0"
           >
             <option value="all">Semua Status</option>
-            <option value="running">Berjalan</option>
-            <option value="idle">Menganggur</option>
+            <option value="running">Beroperasi</option>
+            <option value="idle">Standby</option>
             <option value="maintenance">Perawatan</option>
-            <option value="breakdown">Rusak</option>
+            <option value="breakdown">Gangguan</option>
             <option value="warning">Peringatan</option>
-            <option value="off">Mati</option>
+            <option value="off">Tidak Aktif</option>
           </select>
         </div>
       </div>

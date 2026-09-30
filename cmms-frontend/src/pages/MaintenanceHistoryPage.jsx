@@ -9,10 +9,12 @@ import {
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import Modal from '../components/Modal.jsx';
+import { useSocket } from '../context/useSocket.js';
 
 const PAGE_SIZE = 20;
 
 export default function MaintenanceHistoryPage() {
+  const { socket } = useSocket();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -74,6 +76,16 @@ export default function MaintenanceHistoryPage() {
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  // Auto-refresh saat ada WO diverifikasi/selesai dari sesi lain
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchHistory();
+    socket.on('wo_updated', handleUpdate);
+    return () => {
+      socket.off('wo_updated', handleUpdate);
+    };
+  }, [socket, fetchHistory]);
 
   const hasActiveFilters = Boolean(debouncedSearch) || typeFilter !== 'all' || priorityFilter !== 'all';
 

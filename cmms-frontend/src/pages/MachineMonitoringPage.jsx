@@ -7,11 +7,12 @@ import {
 } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
+import { useSocket } from '../context/useSocket.js';
 
 // Status configuration
 const STATUS_CONFIG = {
     running: {
-        label: 'Berjalan',
+        label: 'Beroperasi',
         color: 'bg-green-100',
         textColor: 'text-green-700',
         borderColor: 'border-green-300',
@@ -20,7 +21,7 @@ const STATUS_CONFIG = {
         dotColor: '#22C55E'
     },
     idle: {
-        label: 'Menganggur',
+        label: 'Standby',
         color: 'bg-blue-100',
         textColor: 'text-blue-700',
         borderColor: 'border-blue-300',
@@ -29,7 +30,7 @@ const STATUS_CONFIG = {
         dotColor: '#3B82F6'
     },
     breakdown: {
-        label: 'Rusak',
+        label: 'Gangguan',
         color: 'bg-red-100',
         textColor: 'text-red-700',
         borderColor: 'border-red-300',
@@ -39,7 +40,7 @@ const STATUS_CONFIG = {
     },
     // 'down' adalah alias lama untuk breakdown
     down: {
-        label: 'Rusak',
+        label: 'Gangguan',
         color: 'bg-red-100',
         textColor: 'text-red-700',
         borderColor: 'border-red-300',
@@ -48,7 +49,7 @@ const STATUS_CONFIG = {
         dotColor: '#EF4444'
     },
     off: {
-        label: 'Mati',
+        label: 'Tidak Aktif',
         color: 'bg-slate-100',
         textColor: 'text-slate-700',
         borderColor: 'border-slate-300',
@@ -313,6 +314,7 @@ const MachineRow = ({ machine, onStatusChange, isUpdating, onSensorClick }) => {
 // --- MAIN PAGE ---
 export default function MachineMonitoringPage() {
     const navigate = useNavigate();
+    const { socket } = useSocket();
     const [machines, setMachines] = useState([]);
     const [statusSummary, setStatusSummary] = useState({});
     const [loading, setLoading] = useState(true);
@@ -354,6 +356,18 @@ export default function MachineMonitoringPage() {
     useEffect(() => {
         fetchMonitoring();
     }, []);
+
+    // Auto-refresh saat ada WO atau aset dibuat/diubah/dihapus dari sesi lain
+    useEffect(() => {
+        if (!socket) return;
+        const handleUpdate = () => fetchMonitoring();
+        socket.on('wo_updated', handleUpdate);
+        socket.on('asset_updated', handleUpdate);
+        return () => {
+            socket.off('wo_updated', handleUpdate);
+            socket.off('asset_updated', handleUpdate);
+        };
+    }, [socket]);
 
     const handleStatusChange = async (machineId, newStatus) => {
         setIsUpdating(machineId);

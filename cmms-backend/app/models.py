@@ -174,7 +174,14 @@ class ComplianceLog(db.Document):
     status = db.StringField(default='pending')
     next_check_due = db.DateTimeField()
     evidence_document_url = db.StringField()
-    
+
+    # Sertifikat/bukti kalibrasi (base64), sama pendekatannya dengan
+    # WorkOrder.initial_image/evidence_image. Wajib diisi saat status
+    # ditandai 'compliant' — lih. compliance_routes.update_compliance_log.
+    certificate_image = db.StringField()
+
+    created_at = db.DateTimeField(default=datetime.datetime.utcnow)
+
     def to_json(self):
         asset_name = self.asset.name if self.asset else "Aset Tidak Ditemukan"
         return {
@@ -185,6 +192,8 @@ class ComplianceLog(db.Document):
             "status": self.status,
             "next_check_due": self.next_check_due.isoformat() if self.next_check_due else None,
             "evidence_document_url": self.evidence_document_url,
+            "certificate_image": self.certificate_image or None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 # --- Model Template Aset ---

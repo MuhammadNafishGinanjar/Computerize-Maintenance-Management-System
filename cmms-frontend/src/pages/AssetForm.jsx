@@ -198,12 +198,12 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
                 onChange={e => setStatus(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors appearance-none font-medium bg-white"
              >
-                 <option value="running">Berjalan (Running)</option>
-                 <option value="idle">Menganggur (Idle)</option>
-                 <option value="breakdown">Rusak (Breakdown)</option>
+                 <option value="running">Beroperasi (Running)</option>
+                 <option value="idle">Standby (Idle)</option>
+                 <option value="breakdown">Gangguan (Breakdown)</option>
                  <option value="maintenance">Perawatan (Maintenance)</option>
                  <option value="warning">Peringatan (Warning)</option>
-                 <option value="off">Mati (Off)</option>
+                 <option value="off">Tidak Aktif (Off)</option>
              </select>
           </div>
         </div>
