@@ -17,8 +17,50 @@ from reportlab.lib.units import cm
 wo_bp = Blueprint('wo_bp', __name__)
 
 # --- Helper Report ---
-def calculate_asset_report_data():
-    all_wos = WorkOrder.objects().all()
+MONTH_NAMES_ID = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+]
+
+
+def _report_period_label(month, year):
+    """Label periode untuk ditampilkan di laporan, mis. 'Juni 2025' atau 'Semua'."""
+    return f"{MONTH_NAMES_ID[month - 1]} {year}" if (month and year) else "Semua"
+
+
+def _parse_report_period(args):
+    """Baca query param opsional 'month' (1-12) & 'year' dari request.
+    Keduanya harus diisi bersamaan untuk mengaktifkan filter — kalau salah
+    satu kosong, laporan dianggap 'Semua' (tanpa filter periode)."""
+    month_raw = args.get('month')
+    year_raw = args.get('year')
+    if not month_raw or not year_raw:
+        return None, None
+    try:
+        month = int(month_raw)
+        year = int(year_raw)
+    except (TypeError, ValueError):
+        raise ValueError("Parameter month/year harus berupa angka.")
+    if not (1 <= month <= 12):
+        raise ValueError("Parameter month harus antara 1-12.")
+    return month, year
+
+
+def _report_filename_suffix(month, year):
+    """Akhiran nama file ekspor sesuai periode aktif, mis. '2025-03' atau 'semua'."""
+    return f"{year}-{month:02d}" if (month and year) else "semua"
+
+
+def calculate_asset_report_data(month=None, year=None):
+    if month and year:
+        start = datetime.datetime(year, month, 1)
+        end = (
+            datetime.datetime(year + 1, 1, 1) if month == 12
+            else datetime.datetime(year, month + 1, 1)
+        )
+        all_wos = WorkOrder.objects(created_at__gte=start, created_at__lt=end)
+    else:
+        all_wos = WorkOrder.objects().all()
     report_data = {}
     
     for wo in all_wos:
@@ -207,7 +249,9 @@ def create_work_order():
                 return jsonify({"error": "Format due_date salah."}), 400
 
         new_wo.save()
-        
+
+        socketio.emit("wo_updated", {})
+
         return jsonify(new_wo.to_json()), 201
 
     except Exception as e:
@@ -279,6 +323,8 @@ def update_work_order(wo_id):
 
         wo.save()
 
+        socketio.emit("wo_updated", {})
+
         # Push real-time ke frontend saat teknisi selesai kerja & butuh
         # verifikasi admin/manager — supaya badge notifikasi tidak perlu
         # menunggu polling untuk kejadian yang jelas dipicu aksi tulis ini.
@@ -302,6 +348,7 @@ def delete_work_order(wo_id):
     try:
         wo = WorkOrder.objects.get(id=wo_id)
         wo.delete()
+        socketio.emit("wo_updated", {})
         return jsonify({"message": "Work Order dihapus."}), 200
     except DoesNotExist:
         return jsonify({"error": "Work Order tidak ditemukan"}), 404
@@ -344,51 +391,136 @@ def reject_verification(wo_id):
 @wo_bp.route('/workorders/report/asset_stats', methods=['GET'])
 def get_asset_report_stats():
     try:
-        final_report = calculate_asset_report_data()
+        month, year = _parse_report_period(request.args)
+        final_report = calculate_asset_report_data(month, year)
         return jsonify(final_report), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        
+
 @wo_bp.route('/workorders/report/export/csv', methods=['GET'])
 def export_asset_report_csv():
     try:
-        report_data = calculate_asset_report_data()
+        month, year = _parse_report_period(request.args)
+        report_data = calculate_asset_report_data(month, year)
         if not report_data: return jsonify({"error": "No data"}), 404
+
         si = StringIO()
         cw = csv.writer(si)
-        header = ['Asset_ID', 'Asset_Name', 'Total_WO', 'Open', 'Pending_Approval', 'Pending_Verify', 'Completed']
+        cw.writerow(['Periode', _report_period_label(month, year)])
+        cw.writerow([])
+        header = ['No', 'Nama_Aset', 'Open', 'In_Progress', 'Selesai', 'Total_WO', 'Completion_Rate']
         cw.writerow(header)
-        for row in report_data:
-            cw.writerow([row['asset_id'], row['asset_name'], row['total_wo'], row['open'], row['pending_approval'], row['pending_verification'], row['completed']])
-        response = make_response(si.getvalue())
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan.csv'
-        response.headers['Content-type'] = 'text/csv'
+        for idx, row in enumerate(report_data, start=1):
+            completion_rate = (row['completed'] / row['total_wo'] * 100) if row['total_wo'] else 0.0
+            cw.writerow([
+                idx, row['asset_name'], row['open'], row['in_progress'],
+                row['completed'], row['total_wo'], f"{completion_rate:.1f}%",
+            ])
+        response = make_response(si.getvalue().encode('utf-8-sig'))
+        filename = f"laporan-wo-{_report_filename_suffix(month, year)}.csv"
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-type'] = 'text/csv; charset=utf-8'
         return response
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        
+
 @wo_bp.route('/workorders/report/export/pdf', methods=['GET'])
 def export_asset_report_pdf():
     try:
-        report_data = calculate_asset_report_data()
+        month, year = _parse_report_period(request.args)
+        report_data = calculate_asset_report_data(month, year)
         if not report_data: return jsonify({"error": "No data"}), 404
+
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+            topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+        )
+
         styles = getSampleStyleSheet()
-        story = [Paragraph("Laporan Kinerja Aset", styles['Title'])]
-        data = [['Aset', 'Total', 'Open', 'Pending Appr', 'Pending Verif', 'Done']]
-        for row in report_data:
-            data.append([row['asset_name'], row['total_wo'], row['open'], row['pending_approval'], row['pending_verification'], row['completed']])
-        table = Table(data)
-        table.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, colors.black)]))
+        title_style = ParagraphStyle(
+            'ReportTitle', parent=styles['Title'],
+            alignment=TA_CENTER, fontSize=16, spaceAfter=2,
+        )
+        subtitle_style = ParagraphStyle(
+            'ReportSubtitle', parent=styles['Normal'],
+            alignment=TA_CENTER, fontSize=9,
+            textColor=colors.HexColor('#64748b'), spaceAfter=10,
+        )
+        cell_style = ParagraphStyle(
+            'Cell', parent=styles['Normal'],
+            fontSize=7, leading=9,
+        )
+
+        story = [
+            Paragraph("Laporan Kinerja Aset", title_style),
+            Paragraph(
+                f"Diekspor pada: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')} "
+                f"&nbsp;|&nbsp; Periode: {_report_period_label(month, year)} "
+                f"&nbsp;|&nbsp; Total: {len(report_data)} Aset",
+                subtitle_style,
+            ),
+            Spacer(1, 0.3 * cm),
+        ]
+
+        header_row = ['No', 'Nama Aset', 'Open', 'In Progress', 'Selesai', 'Total WO', 'Completion Rate']
+        table_data = [header_row]
+        for idx, row in enumerate(report_data, start=1):
+            completion_rate = (row['completed'] / row['total_wo'] * 100) if row['total_wo'] else 0.0
+            table_data.append([
+                str(idx),
+                Paragraph(row['asset_name'], cell_style),
+                row['open'],
+                row['in_progress'],
+                row['completed'],
+                row['total_wo'],
+                f"{completion_rate:.1f}%",
+            ])
+
+        # A4 landscape usable width ≈ 26.7 cm (after 1.5cm margins each side)
+        col_widths = [1.0*cm, 7.0*cm, 3.0*cm, 3.5*cm, 3.0*cm, 3.0*cm, 3.5*cm]
+
+        style_cmds = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+            ('ALIGN', (6, 1), (6, -1), 'CENTER'),
+        ]
+        for i in range(1, len(table_data)):
+            bg = colors.white if i % 2 == 1 else colors.HexColor('#f1f5f9')
+            style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg))
+
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle(style_cmds))
         story.append(table)
+
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()
         response = make_response(pdf_value)
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan.pdf'
+        filename = f"laporan-wo-{_report_filename_suffix(month, year)}.pdf"
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
         response.headers['Content-type'] = 'application/pdf'
         return response
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -463,7 +595,7 @@ def export_history_csv():
                 r['foto_awal'], r['foto_bukti']
             ])
 
-        response = make_response('﻿' + si.getvalue())
+        response = make_response(si.getvalue().encode('utf-8-sig'))
         response.headers['Content-Disposition'] = 'attachment; filename=Riwayat_Perawatan.csv'
         response.headers['Content-type'] = 'text/csv; charset=utf-8'
         return response

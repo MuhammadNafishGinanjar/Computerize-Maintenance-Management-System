@@ -1,26 +1,41 @@
 // src/pages/ReportPage.jsx
 import React, { useState, useEffect } from 'react';
 import api, { BASE_URL } from '../services/api';
-import { FileWarning, FileText, FileDown, BarChart2 } from 'lucide-react';
+import { FileWarning, FileText, FileDown, BarChart2, CalendarRange } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 
 const EXPORT_CSV_API = `${BASE_URL}/workorders/report/export/csv`;
 const EXPORT_PDF_API = `${BASE_URL}/workorders/report/export/pdf`;
 
+const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+
 export default function ReportPage() {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Ambil data laporan
+  // Filter periode — default bulan & tahun berjalan. isAll=true berarti
+  // tombol "Semua" aktif (tanpa filter periode, tampilkan seluruh riwayat).
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [isAll, setIsAll] = useState(false);
+
+  // Ambil data laporan — refetch tiap kali filter periode berubah
   useEffect(() => {
     const fetchReport = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get('/workorders/report/asset_stats');
-        setReportData(response.data); 
+        const params = isAll ? {} : { month, year };
+        const response = await api.get('/workorders/report/asset_stats', { params });
+        setReportData(response.data);
       } catch (err) {
         if (err.response) {
           setError(`Gagal mengambil data laporan: ${err.response.status} ${err.response.statusText}`);
@@ -35,15 +50,19 @@ export default function ReportPage() {
     };
 
     fetchReport();
-  }, []);
+  }, [month, year, isAll]);
 
-  // --- LOGIKA EKSPOR ---
+  const handleMonthChange = (e) => { setIsAll(false); setMonth(Number(e.target.value)); };
+  const handleYearChange = (e) => { setIsAll(false); setYear(Number(e.target.value)); };
+
+  // --- LOGIKA EKSPOR — kirim periode filter aktif ke endpoint export ---
   const handleExport = (format) => {
+    const query = isAll ? '' : `?month=${month}&year=${year}`;
     let url;
     if (format === 'CSV') {
-        url = EXPORT_CSV_API;
+        url = `${EXPORT_CSV_API}${query}`;
     } else if (format === 'PDF') {
-        url = EXPORT_PDF_API;
+        url = `${EXPORT_PDF_API}${query}`;
     } else {
         return;
     }
@@ -82,6 +101,48 @@ export default function ReportPage() {
         </div>
       </div>
       
+      {/* Filter Periode */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium shrink-0">
+            <CalendarRange size={16} />
+            Periode
+          </div>
+          <select
+            value={month}
+            onChange={handleMonthChange}
+            className={`text-sm border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white shrink-0 ${
+              isAll ? 'border-slate-200 text-slate-400' : 'border-slate-300'
+            }`}
+          >
+            {MONTH_NAMES.map((name, idx) => (
+              <option key={name} value={idx + 1}>{name}</option>
+            ))}
+          </select>
+          <select
+            value={year}
+            onChange={handleYearChange}
+            className={`text-sm border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white shrink-0 ${
+              isAll ? 'border-slate-200 text-slate-400' : 'border-slate-300'
+            }`}
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setIsAll(prev => !prev)}
+            className={`text-sm font-semibold px-4 py-2 rounded-lg border transition-colors shrink-0 ${
+              isAll
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Semua
+          </button>
+        </div>
+      </div>
+
       {/* Card Tabel Laporan */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">

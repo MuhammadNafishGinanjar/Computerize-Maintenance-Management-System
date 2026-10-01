@@ -1,5 +1,6 @@
 # /cmms-backend/app/api/asset_routes.py
 from flask import Blueprint, request, jsonify
+from app import socketio
 from app.models import Asset, ComponentItem
 from mongoengine.errors import NotUniqueError, DoesNotExist
 
@@ -44,7 +45,8 @@ def create_asset():
         )
         
         new_asset.save()
-        return jsonify(new_asset.to_json()), 201 
+        socketio.emit("asset_updated", {})
+        return jsonify(new_asset.to_json()), 201
         
     except NotUniqueError:
         return jsonify({"error": "ID Mesin sudah ada. Gunakan ID unik."}), 400
@@ -88,6 +90,7 @@ def update_asset(asset_id):
             asset.components = component_list
 
         asset.save()
+        socketio.emit("asset_updated", {})
         return jsonify(asset.to_json()), 200
 
     except DoesNotExist:
@@ -101,6 +104,7 @@ def delete_asset(asset_id):
     try:
         asset = Asset.objects.get(id=asset_id)
         asset.delete()
+        socketio.emit("asset_updated", {})
         return jsonify({"message": f"Aset '{asset.name}' berhasil dihapus."}), 200
     except DoesNotExist:
         return jsonify({"error": "Aset tidak ditemukan"}), 404
@@ -187,7 +191,8 @@ def update_machine_status(asset_id):
         
         asset.status = new_status
         asset.save()
-        
+        socketio.emit("asset_updated", {})
+
         return jsonify({
             "message": f"Status mesin '{asset.name}' diperbarui menjadi '{new_status}'",
             "asset": asset.to_json()

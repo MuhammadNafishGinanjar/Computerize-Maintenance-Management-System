@@ -1,7 +1,7 @@
 // src/components/NotificationDropdown.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../services/api';
-import { Bell, CalendarClock, ShieldCheck, Loader2, X, AlertTriangle, Activity } from 'lucide-react';
+import { Bell, CalendarClock, ShieldCheck, Loader2, X, AlertTriangle, Activity, Award } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MLNotificationDetailModal from './MLNotificationDetailModal';
 import { useSocket } from '../context/useSocket.js';
@@ -31,13 +31,14 @@ const SCHEDULE_POLL_MS = 5 * 60 * 1000;
 //   dengan notif jadwal overdue di bawah, yang memang didesain re-arm harian.
 // - Jadwal overdue: id + days_left   → update tiap hari jika belum dikerjakan
 // - Jadwal upcoming/today: id + status → hanya sekali
+// - Kalibrasi (H-7): sama seperti jadwal di atas — id + days_left/status
 // - Verifikasi WO : id saja
 const getTrackingKey = (notif) => {
   if (notif.type === 'predictive') {
     const today = new Date().toISOString().slice(0, 10);
     return `${notif.id}:${notif.risk_level}:${today}`;
   }
-  if (notif.type === 'schedule') {
+  if (notif.type === 'schedule' || notif.type === 'calibration') {
     const d = notif.daysLeft;
     if (d < 0)  return `${notif.id}:overdue:${d}`;
     if (d === 0) return `${notif.id}:today`;
@@ -145,6 +146,23 @@ export default function NotificationDropdown() {
             overall_health_score: pred.overall_health_score,
             risk_level:          pred.risk_level,
             faulty_components:   pred.faulty_components,
+          });
+        });
+      }
+
+      // 4. Kalibrasi mendekati/terlewat jatuh tempo (H-7, pola sama dengan
+      // jadwal perawatan di poin 1 — lih. dashboard_routes.get_dashboard_stats)
+      if (data.calibration_notifications) {
+        data.calibration_notifications.forEach(calib => {
+          newNotifs.push({
+            id:       calib.id,
+            type:     'calibration',
+            title:    calib.title,
+            message:  calib.message,
+            link:     calib.link,
+            priority: calib.priority,
+            date:     calib.date,
+            daysLeft: calib.daysLeft,
           });
         });
       }
@@ -326,11 +344,13 @@ export default function NotificationDropdown() {
                             <div className={`p-2 rounded-full ${
                               notif.type === 'verification' ? 'bg-purple-100 text-purple-600' :
                               notif.type === 'predictive'   ? 'bg-red-100 text-red-600' :
+                              notif.type === 'calibration'  ? 'bg-violet-100 text-violet-700' :
                               notif.priority === 'high'     ? 'bg-orange-100 text-orange-600' :
                               'bg-blue-100 text-blue-600'
                             }`}>
                               {notif.type === 'verification' ? <ShieldCheck size={14} /> :
                                notif.type === 'predictive'   ? <Activity size={14} /> :
+                               notif.type === 'calibration'  ? <Award size={14} /> :
                                notif.priority === 'high'     ? <AlertTriangle size={14} /> :
                                <CalendarClock size={14} />}
                             </div>

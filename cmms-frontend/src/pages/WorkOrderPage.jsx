@@ -7,11 +7,13 @@ import ErrorState from '../components/ErrorState.jsx';
 import WorkOrderForm from './WorkOrderForm.jsx';
 import Modal from '../components/Modal.jsx';
 import { useAuth } from '../context/useAuth.js';
+import { useSocket } from '../context/useSocket.js';
 import { useLocation } from 'react-router-dom';
 
 export default function WorkOrderPage() {
   const { user, checkRole } = useAuth();
   const location = useLocation();
+  const { socket } = useSocket();
 
   const [workOrders, setWorkOrders] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -63,6 +65,16 @@ export default function WorkOrderPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh saat ada WO dibuat/diubah/dihapus dari sesi lain
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchData();
+    socket.on('wo_updated', handleUpdate);
+    return () => {
+      socket.off('wo_updated', handleUpdate);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (location.state?.fromSchedule) {
