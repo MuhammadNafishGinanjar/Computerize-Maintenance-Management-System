@@ -167,6 +167,41 @@ def _forward(method, path, **kwargs):
         return {"error": f"HTTP {res.status_code}"}, res.status_code
 
 
+@app.route("/send-sensor", methods=["POST"])
+def send_sensor():
+    """Endpoint JSON untuk mode Continuous — dipanggil AJAX dari index.html.
+
+    Body: { "machine_id": "...", "<field>": <float>, ... }
+    Response: { "ok": true } atau { "ok": false, "error": "..." }
+    """
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"ok": False, "error": "Body JSON tidak valid."}), 400
+
+    machine_id = payload.get("machine_id", "").strip() or MACHINE_ID
+
+    # Validasi: setiap field sensor harus bisa di-cast ke float
+    clean = {"machine_id": machine_id}
+    for key, *_ in SENSOR_FIELDS:
+        val = payload.get(key)
+        if val is None:
+            return jsonify({"ok": False, "error": f"Field '{key}' wajib ada."}), 400
+        try:
+            clean[key] = float(val)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": f"Field '{key}' harus berupa angka."}), 400
+
+    asset_error = ensure_dummy_asset() if machine_id == MACHINE_ID else None
+    if asset_error:
+        return jsonify({"ok": False, "error": f"Gagal menyiapkan aset: {asset_error}"}), 502
+
+    err = send_sensor_data(clean)
+    if err:
+        return jsonify({"ok": False, "error": err}), 502
+
+    return jsonify({"ok": True})
+
+
 @app.route("/health-demo")
 def health_demo():
     return render_template(
