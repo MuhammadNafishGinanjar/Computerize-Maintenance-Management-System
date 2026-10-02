@@ -24,9 +24,11 @@ ChartJS.register(
 );
 
 // Label & satuan untuk setiap field sensor
+// `normal` = nilai referensi kondisi sehat (dari preset "normal" di config simulasi)
 const FIELD_META = {
     rpm:                 { label: 'RPM',                  unit: 'RPM',    color: '#3B82F6', icon: Zap },
     motor_power:         { label: 'Motor Power',          unit: 'W',      color: '#8B5CF6', icon: Zap },
+    // Compressor (CMP-DUMMY-001)
     noise_db:            { label: 'Kebisingan',           unit: 'dB',     color: '#F59E0B', icon: Radio },
     outlet_pressure_bar: { label: 'Tekanan Outlet',       unit: 'bar',    color: '#EF4444', icon: Gauge },
     air_flow:            { label: 'Aliran Udara',         unit: 'm³/h',   color: '#06B6D4', icon: Wind },
@@ -60,6 +62,35 @@ const FIELD_META = {
     vz:                  { label: 'Getaran Sumbu Z',      unit: 'mm/s',   color: '#A5B4FC', icon: Activity },
     // Fitur model Bubut (BBT-001) — active_power_w, temp_c, vx/vy/vz sudah di atas
     vrms:                { label: 'Getaran Resultan',     unit: 'mm/s',   color: '#7C3AED', icon: Activity },
+};
+
+// Nilai referensi kondisi normal per mesin — diambil dari preset "normal"
+// di config simulasi (Simulasi/Version 2/simulasi-input data/config.py).
+// Hanya 3 mesin yang punya model ML aktif.
+const NORMAL_VALUES = {
+    'CMP-DUMMY-001': {
+        noise_db:    51.50,
+        water_flow:  58.11,
+        air_flow:    600.0,
+        gaccx:       0.5768,
+        outlet_temp: 118.28,
+    },
+    'DRL-001': {
+        current_a:      0.834,
+        active_power_w: 164.20,
+        temp_c:         34.43,
+        vx:             16.25,
+        vy:             6.975,
+        vz:             40.77,
+    },
+    'BBT-001': {
+        active_power_w: 2274.09,
+        temp_c:         30.60,
+        vx:             2.398,
+        vy:             0.775,
+        vz:             0.482,
+        vrms:           2.566,
+    },
 };
 
 const HEALTH_COLORS = {
@@ -153,7 +184,7 @@ function downloadCsv(filename, content) {
 }
 
 // ── Chart satu sensor ──────────────────────────────────────────────────────
-function SensorChart({ field, history }) {
+function SensorChart({ field, history, normalValue }) {
     const meta = getFieldMeta(field);
     const Icon = meta.icon;
 
@@ -212,6 +243,11 @@ function SensorChart({ field, history }) {
                     <div>
                         <p className="text-xs font-bold text-slate-700">{meta.label}</p>
                         <p className="text-[10px] text-slate-400">{meta.unit}</p>
+                        {normalValue != null && (
+                            <p className="text-[10px] text-slate-400">
+                                Normal: <span className="font-semibold text-slate-500">{normalValue} {meta.unit}</span>
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div className="text-right">
@@ -513,7 +549,7 @@ export default function SensorMonitoringPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     <HealthChart history={history} />
                     {available_fields.map(f => (
-                        <SensorChart key={f} field={f} history={history} />
+                        <SensorChart key={f} field={f} history={history} normalValue={NORMAL_VALUES[assetId]?.[f] ?? null} />
                     ))}
                 </div>
             ) : (

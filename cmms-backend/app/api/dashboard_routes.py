@@ -1,6 +1,6 @@
 # /cmms-backend/app/api/dashboard_routes.py
 from flask import Blueprint, jsonify
-from app.models import Asset, WorkOrder, MaintenanceSchedule, ComponentItem, AssetHealthStatus
+from app.models import Asset, WorkOrder, MaintenanceSchedule, ComponentItem, AssetHealthStatus, ComplianceLog
 import datetime
 import math
 
@@ -136,6 +136,46 @@ def get_dashboard_stats():
                 "priority": "high" if days_left <= 3 or schedule_status == "overdue" else "medium"
             })
 
+        # --- 4b. Kalibrasi Segera Jatuh Tempo (H-7, sama polanya dengan
+        # upcoming_schedules di atas) ---
+        # Batas bawah (now - 1 hari) sengaja dipasang supaya kalibrasi yang
+        # baru saja lewat tapi belum sempat ditandai 'overdue' oleh
+        # _auto_mark_overdue() (lih. compliance_routes.py) tetap kebagian
+        # notifikasi H-7 ini, bukan langsung hilang dari radar.
+        calib_window_start = today - datetime.timedelta(days=1)
+        calib_window_end = today + datetime.timedelta(days=7)
+
+        calibration_logs_raw = ComplianceLog.objects(
+            status='pending',
+            next_check_due__ne=None,
+            next_check_due__gte=calib_window_start,
+            next_check_due__lte=calib_window_end,
+        ).order_by('next_check_due')
+
+        calibration_notifications = []
+        for log in calibration_logs_raw:
+            delta = log.next_check_due - today
+            days_left = math.ceil(delta.total_seconds() / 86400)
+            asset_name = log.asset.name if log.asset else "Unknown Asset"
+
+            if days_left < 0:
+                message = f"{log.regulation_name} untuk {asset_name} terlambat {abs(days_left)} hari"
+            elif days_left == 0:
+                message = f"{log.regulation_name} untuk {asset_name} jatuh tempo hari ini"
+            else:
+                message = f"{log.regulation_name} untuk {asset_name} jatuh tempo dalam {days_left} hari"
+
+            calibration_notifications.append({
+                "id": f"calib-{str(log.id)}",
+                "type": "calibration",
+                "title": "Kalibrasi Segera Jatuh Tempo",
+                "message": message,
+                "link": "/compliance",
+                "priority": "high" if days_left <= 3 else "medium",
+                "date": log.next_check_due.isoformat(),
+                "daysLeft": days_left,
+            })
+
         # --- 5. List WO Verifikasi ---
         verification_list_raw = WorkOrder.objects(status='pending_verification').order_by('created_at').limit(5)
         verification_list = []
@@ -145,7 +185,7 @@ def get_dashboard_stats():
                 "title": wo.title,
                 "asset_name": wo.asset.name if wo.asset else "Unknown",
                 "technician": wo.assigned_to.name if wo.assigned_to else "Unassigned",
-                "completed_at": wo.completed_at.isoformat() if wo.completed_at else None
+                "completed_at": (wo.completed_at or wo.created_at).isoformat() if (wo.completed_at or wo.created_at) else None
             })
 
         stats = {
@@ -164,7 +204,10 @@ def get_dashboard_stats():
 
             "upcoming_schedules": upcoming_schedules,
             "verification_needed_list": verification_list,
-            
+
+            # Kalibrasi H-7 (NEW)
+            "calibration_notifications": calibration_notifications,
+
             # Predictive Maintenance Notifications (NEW)
             "predictive_maintenance_notifications": get_predictive_maintenance_notifications()
         }

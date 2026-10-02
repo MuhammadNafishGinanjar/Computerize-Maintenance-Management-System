@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import StatusChart from '../components/StatusChart.jsx';
 import AssetWOChart from '../components/AssetWOChart.jsx';
-import { Link } from 'react-router-dom'; 
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
+import { useSocket } from '../context/useSocket.js';
 
 // --- KOMPONEN STAT CARD ---
 const StatCard = ({ title, value, subtitle, icon, color, isLoading, linkTo, alert }) => (
@@ -51,6 +52,7 @@ const StatCard = ({ title, value, subtitle, icon, color, isLoading, linkTo, aler
 
 export default function DashboardPage() {
   const { checkRole } = useAuth();
+  const { socket } = useSocket();
   const [stats, setStats] = useState({
     total_assets: 0,
     down_assets: 0,
@@ -107,6 +109,18 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  // Auto-refresh saat ada WO atau aset dibuat/diubah/dihapus dari sesi lain
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => fetchStats();
+    socket.on('wo_updated', handleUpdate);
+    socket.on('asset_updated', handleUpdate);
+    return () => {
+      socket.off('wo_updated', handleUpdate);
+      socket.off('asset_updated', handleUpdate);
+    };
+  }, [socket, fetchStats]);
 
   if (error) return <ErrorState message={error} />;
 

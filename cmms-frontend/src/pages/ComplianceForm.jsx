@@ -8,25 +8,41 @@ export default function ComplianceForm({ assets, onLogCreated }) {
   const [regulationName, setRegulationName] = useState('');
   const [nextCheckDue, setNextCheckDue] = useState('');
   const [status, setStatus] = useState('pending');
-  
+  const [certificateImage, setCertificateImage] = useState(null);
+
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = () => {
     setAssetId(''); setRegulationName(''); setNextCheckDue(''); setStatus('pending');
+    setCertificateImage(null);
+  };
+
+  const handleCertificateFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setCertificateImage(reader.result);
+      reader.readAsDataURL(file);
+    } else {
+      setCertificateImage(null);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!assetId || !regulationName || !nextCheckDue) { setError("Data wajib diisi."); return; }
+    if (status === 'compliant' && !certificateImage) { setError("Sertifikat wajib diupload untuk status Compliant."); return; }
 
     setError(null); setSuccess(null); setIsSubmitting(true);
 
     try {
-      const response = await api.post('/compliance/logs', {
+      const payload = {
         asset_id: assetId, regulation_name: regulationName, next_check_due: nextCheckDue, status: status,
-      });
+      };
+      if (status === 'compliant') payload.certificate_image = certificateImage;
+      const response = await api.post('/compliance/logs', payload);
       onLogCreated(response.data); 
       setSuccess(`Log "${response.data.regulation_name}" berhasil dicatat.`);
       resetForm();
@@ -102,6 +118,23 @@ export default function ComplianceForm({ assets, onLogCreated }) {
               <option value="overdue">Overdue (Terlambat)</option>
             </select>
           </div>
+
+          {/* Sertifikat (wajib bila status Compliant) */}
+          {status === 'compliant' && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Upload Sertifikat *</label>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={handleCertificateFileChange}
+                required
+                className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {certificateImage && (
+                <p className="text-xs text-green-600 mt-1">File siap diunggah.</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="text-right pt-2">
